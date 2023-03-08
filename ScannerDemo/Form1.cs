@@ -5,6 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -14,6 +15,7 @@ namespace ScannerDemo
 {
     public partial class Form1 : Form
     {
+        private static readonly HttpClient client = new HttpClient();
         public Form1()
         {
             InitializeComponent();
@@ -130,6 +132,35 @@ namespace ScannerDemo
             image.SaveFile(path);
 
             pictureBox1.Image = new Bitmap(path);
+
+            SendImageAsync(image);
+        }
+
+        private async Task SendImageAsync(ImageFile image)
+        {
+            var imageBytes = (byte[])image.FileData.get_BinaryData();
+            var response = Upload("http://localhost:5000/ScannedPage", imageBytes);
+            Console.WriteLine(response);
+        }
+
+        private async Task<string> Upload(string actionUrl, byte[] paramFileBytes)
+        {
+            //HttpContent stringContent = new StringContent(paramString);
+            //HttpContent fileStreamContent = new StreamContent(paramFileStream);
+            HttpContent bytesContent = new ByteArrayContent(paramFileBytes, 0, paramFileBytes.Length);
+            using (var client = new HttpClient())
+            using (var formData = new MultipartFormDataContent())
+            {
+                //formData.Add(stringContent, "param1", "param1");
+                //formData.Add(fileStreamContent, "file1", "file1");
+                formData.Add(bytesContent, "ImageFile", "image");
+                var response = await client.PostAsync(actionUrl, formData);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+                return await response.Content.ReadAsStringAsync();
+            }
         }
 
         private void button2_Click(object sender, EventArgs e)
