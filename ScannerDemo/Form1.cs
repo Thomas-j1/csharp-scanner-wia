@@ -1,12 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using WIA;
@@ -78,6 +74,11 @@ namespace ScannerDemo
 
             if (device == null)
             {
+                Thread newThread = new Thread(new ThreadStart(SelectFromFile));
+                newThread.SetApartmentState(ApartmentState.STA);
+                newThread.Start();
+                //SelectFromFile();
+                return;
                 MessageBox.Show("You need to select first an scanner device from the list",
                                 "Warning",
                                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -120,6 +121,8 @@ namespace ScannerDemo
                 }
             }));
             
+            // send image
+            Task.Factory.StartNew(() => SendImageAsync(image));
             
             // Save the image
             var path = Path.Combine(textBox1.Text, textBox2.Text + imageExtension);
@@ -132,8 +135,45 @@ namespace ScannerDemo
             image.SaveFile(path);
 
             pictureBox1.Image = new Bitmap(path);
+        }
 
-            SendImageAsync(image);
+        [STAThread]
+        private void SelectFromFile()
+        {
+            var fileContent = string.Empty;
+            var filePath = string.Empty;
+
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.InitialDirectory = "c:\\";
+                openFileDialog.Filter = "txt files (*.txt)|*.txt|All files (*.*)|*.*";
+                openFileDialog.FilterIndex = 2;
+                openFileDialog.RestoreDirectory = true;
+
+                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    //Get the path of specified file
+                    filePath = openFileDialog.FileName;
+
+                    //Read the contents of the file into a stream
+                    var fileStream = openFileDialog.OpenFile();
+
+                    var binary = ReadFully(fileStream);
+                    var response = Upload("http://localhost:5000/ScannedPage", binary);
+                    Console.WriteLine(response);
+                }
+            }
+            // Console.WriteLine(fileContent);
+            // MessageBox.Show(fileContent, "File Content at path: " + filePath, MessageBoxButtons.OK);
+        }
+
+        public static byte[] ReadFully(Stream input)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                input.CopyTo(ms);
+                return ms.ToArray();
+            }
         }
 
         private async Task SendImageAsync(ImageFile image)
